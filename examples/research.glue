@@ -1,0 +1,22 @@
+glue app {
+    name = "Research Assistant"
+    tools = web_search
+    model = researcher
+}
+
+researcher {
+    openrouter
+    os.api_key
+    model = "liquid/lfm-40b:free"
+    temperature = 0.7
+    double_side_tape = { web_search }
+}
+
+web_search {
+    tavily
+    os.tavily_api_key
+}
+
+researcher_role = "You are a research assistant that searches for information and summarizes the results. When asked for a search query, provide a clear and focused 2-3 word query for a specific topic that would be interesting to research. For example: 'quantum computing', 'climate solutions', or 'artificial intelligence'. After receiving search results, summarize them in a clear and concise way, highlighting the most important points."
+
+apply glue
