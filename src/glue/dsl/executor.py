@@ -5,7 +5,7 @@
 import os
 import asyncio
 from typing import Any, Dict
-from .parser import GlueApp, ModelConfig, ToolConfig
+from .parser import GlueApp, ModelConfig, ToolConfig, CBMConfig
 from ..adhesive import (
     workspace, double_side_tape,
     tool as create_tool
@@ -14,6 +14,7 @@ from ..providers import (
     OpenRouterProvider
 )
 from ..magnetic.field import MagneticField
+from ..core.cbm import CBM
 
 class GlueExecutor:
     """Executor for GLUE Applications"""
@@ -22,6 +23,7 @@ class GlueExecutor:
         self.app = app
         self.tools = {}
         self.models = {}
+        self.cbm = None
         self._setup_environment()
     
     def _setup_environment(self):
@@ -111,6 +113,40 @@ class GlueExecutor:
                 self.models[model_name] = OpenRouterProvider(**model_settings)
                 print(f"Model {model_name} setup complete")
     
+    async def _setup_cbm(self, cbm_config: CBMConfig):
+        """Setup CBM with models and bindings"""
+        # Create CBM instance
+        self.cbm = CBM(self.app.name)
+        
+        # Add models to CBM
+        for model_name in cbm_config.models:
+            model = self.models.get(model_name)
+            if not model:
+                raise ValueError(f"Model {model_name} not found")
+            self.cbm.add_model(model)
+        
+        # Set up double-side tape bindings
+        for model1, model2 in cbm_config.double_side_tape:
+            self.cbm.bind_models(model1, model2, binding_type='double_side_tape')
+        
+        # Set up permanent tool bindings
+        for tool_name, model_name in cbm_config.glue.items():
+            tool = self.tools.get(tool_name)
+            if not tool:
+                raise ValueError(f"Tool {tool_name} not found")
+            self.cbm.bind_models(model_name, tool_name, binding_type='glue')
+        
+        # Set up magnetic tool sharing
+        for tool_name, model_names in cbm_config.magnets.items():
+            tool = self.tools.get(tool_name)
+            if not tool:
+                raise ValueError(f"Tool {tool_name} not found")
+            for model_name in model_names:
+                model = self.models.get(model_name)
+                if not model:
+                    raise ValueError(f"Model {model_name} not found")
+                self.cbm.bind_models(model_name, tool_name, binding_type='magnet')
+    
     async def execute(self) -> Any:
         """Execute GLUE application"""
         # Setup models
@@ -122,10 +158,15 @@ class GlueExecutor:
                 # Setup tools in field
                 await self._setup_tools(field)
                 
-                # Get main model
-                model = self.models.get(self.app.model)
-                if not model:
-                    raise ValueError(f"Model {self.app.model} not found")
+                # Setup CBM if configured
+                if self.app.cbm_config:
+                    await self._setup_cbm(self.app.cbm_config)
+                    model = self.cbm
+                else:
+                    # Get main model
+                    model = self.models.get(self.app.model)
+                    if not model:
+                        raise ValueError(f"Model {self.app.model} not found")
                 
                 # Create workspace
                 async with workspace(self.app.name) as ws:
@@ -137,12 +178,15 @@ class GlueExecutor:
                         if user_input.lower() in ['exit', 'quit']:
                             break
                         
-                        # Get model's response
+                        # Process input through CBM or single model
                         print("\nthinking...", flush=True)
-                        response = await model.generate(user_input)
+                        if self.cbm:
+                            response = await self.cbm.process_input(user_input)
+                        else:
+                            response = await model.generate(user_input)
                         
                         # Execute chain if defined
-                        if self.app.models[self.app.model].chain:
+                        if not self.cbm and self.app.models[self.app.model].chain:
                             print("\nexecuting chain...", flush=True)
                             result = response
                             for tool_name in self.app.models[self.app.model].chain["tools"]:

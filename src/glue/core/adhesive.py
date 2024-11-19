@@ -12,6 +12,7 @@ class AdhesiveType(Enum):
     TAPE = "tape"         # Temporary binding
     MAGNET = "magnet"     # Dynamic binding
     DUCT_TAPE = "duct_tape"  # Fallback binding
+    DOUBLE_SIDE_TAPE = "double_side_tape"  # Sequential operations
 
 @dataclass
 class AdhesiveProperties:
@@ -72,6 +73,13 @@ class Adhesive:
                 durability=0.5,
                 flexibility=0.6,
                 is_reusable=False
+            ),
+            AdhesiveType.DOUBLE_SIDE_TAPE: AdhesiveProperties(
+                strength=0.9,
+                durability=0.8,
+                flexibility=0.7,
+                is_reusable=True,
+                max_uses=None  # Can be used indefinitely for sequential operations
             )
         }
         return defaults[self.type]

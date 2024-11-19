@@ -16,10 +16,11 @@ class CBM:
         self.conversation_manager = ConversationManager()
         # update binding patterns to store actual Adhesive instances
         self.bindings: Dict[str, List[tuple[str, str, Adhesive]]] = {
-            'glue': [],      # Permanent bindings
-            'velcro': [],    # Swappable bindings
-            'tape': [],      # Temporary test bindings
-            'magnet': []     # Dynamic bindings
+            'glue': [],              # Permanent bindings
+            'velcro': [],            # Swappable bindings
+            'tape': [],              # Temporary test bindings
+            'magnet': [],            # Dynamic bindings
+            'double_side_tape': []   # Sequential operations
         }
         self.adhesive_factory = AdhesiveFactory()
         self.memory_manager = MemoryManager()
@@ -96,21 +97,26 @@ class CBM:
             memory_type="working"
         )
         
-        #Get only active bindings for processing
+        # Get only active bindings for processing
         active_bindings = self.get_active_bindings()
-        return await self.conversation_manager.process(
-            self.models,
-            active_bindings,
-            user_input
-        )
         
+        # Process through double-side tape chain first
+        current_input = user_input
+        for model1, model2, _ in self.bindings['double_side_tape']:
+            if model1 in self.models and model2 in self.models:
+                # Process through first model
+                current_input = await self.models[model1].generate(current_input)
+                # Pass result to second model
+                current_input = await self.models[model2].generate(current_input)
+        
+        # Store final response
         self.memory_manager.store(
             key=f"response_{datetime.now().timestamp()}",
-            content=response,
+            content=current_input,
             memory_type="short_term"
         )
         
-        return response
+        return current_input
     
 # =================SERIALIZATION=================
 

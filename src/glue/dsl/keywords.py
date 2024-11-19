@@ -115,6 +115,26 @@ APP_KEYWORDS = {
     'components': 'tools'
 }
 
+# CBM Keywords
+CBM_KEYWORDS = {
+    # CBM Definition
+    'cbm': 'cbm',
+    'team': 'cbm',
+    'group': 'cbm',
+    'ensemble': 'cbm',
+    
+    # CBM Components
+    'models': 'models',
+    'bindings': 'bindings',
+    'magnets': 'magnets',
+    'tools': 'tools',
+    
+    # CBM Operations
+    'double_side_tape': 'chain',
+    'glue': 'permanent',
+    'magnets': 'shared'
+}
+
 def get_keyword_type(keyword: str) -> tuple[str, str]:
     """Get the type and normalized value for a keyword"""
     keyword = keyword.lower()
@@ -122,6 +142,10 @@ def get_keyword_type(keyword: str) -> tuple[str, str]:
     # Special cases for app blocks
     if keyword in ['glue app', 'application']:
         return 'app', 'app'
+    
+    # Check for CBM block
+    if keyword == 'cbm':
+        return 'cbm', 'cbm'
     
     # Check each keyword mapping
     if keyword in PROVIDER_KEYWORDS:
@@ -134,6 +158,8 @@ def get_keyword_type(keyword: str) -> tuple[str, str]:
         return 'operation', OPERATION_KEYWORDS[keyword]
     elif keyword in APP_KEYWORDS:
         return 'app', APP_KEYWORDS[keyword]
+    elif keyword in CBM_KEYWORDS:
+        return 'cbm', CBM_KEYWORDS[keyword]
     
     # Check for role suffix
     for suffix in ROLE_KEYWORDS:

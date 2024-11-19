@@ -1,0 +1,103 @@
+glue app {
+    name = "Autonomous Team"
+    tools = web_search, code_interpreter, file_handler
+    model = autonomous_team
+}
+
+// Define the CBM that wraps all models
+autonomous_team {
+    models = planner, researcher, executor, validator
+    
+    // Define model bindings and interactions
+    double_side_tape = {
+        planner >> researcher,
+        researcher >> executor,
+        executor >> validator,
+        validator >> planner  // Feedback loop
+    }
+    
+    // Permanent tool bindings
+    glue {
+        web_search: researcher,  // Researcher always has web search
+        file_handler: executor   // Executor always has file handler
+    }
+    
+    // Dynamic tool sharing
+    magnets {
+        code_interpreter: [executor, validator]  // These models can share the code interpreter
+    }
+}
+
+// Planner: Breaks down tasks and coordinates other models
+planner {
+    openrouter
+    os.api_key
+    model = "liquid/lfm-40b:free"
+    temperature = 0.7
+}
+
+planner_role = "You are a strategic planner that breaks down complex tasks into clear steps. You coordinate with other specialized models to accomplish goals efficiently. When given a task:
+1. Break it down into clear sub-tasks
+2. Assign appropriate models to each sub-task
+3. Monitor progress and adjust the plan as needed
+4. Ensure all parts work together cohesively"
+
+// Researcher: Gathers and analyzes information
+researcher {
+    openrouter
+    os.api_key
+    model = "liquid/lfm-40b:free"  // Using same model for consistency
+    temperature = 0.7
+}
+
+researcher_role = "You are a thorough researcher that gathers and analyzes information. You:
+1. Understand research requirements from the planner
+2. Use web search to gather relevant information
+3. Analyze and synthesize findings
+4. Provide clear, actionable insights to the executor"
+
+// Executor: Implements solutions
+executor {
+    openrouter
+    os.api_key
+    model = "meta-llama/llama-3.2-3b-instruct:free"
+    temperature = 0.7
+}
+
+executor_role = "You are a skilled executor that implements solutions. You:
+1. Take research findings and planner instructions
+2. Write code and create files as needed
+3. Execute necessary commands
+4. Document your actions for the validator"
+
+// Validator: Verifies results
+validator {
+    openrouter
+    os.api_key
+    model = "nousresearch/hermes-3-llama-3.1-405b:free"
+    temperature = 0.7
+}
+
+validator_role = "You are a meticulous validator that verifies work quality. You:
+1. Review executor outputs
+2. Check against original requirements
+3. Verify code functionality
+4. Provide feedback for improvements
+5. Only approve when all criteria are met"
+
+// Tool configurations
+web_search {
+    tavily
+    os.tavily_api_key
+}
+
+code_interpreter {
+    python
+}
+
+file_handler {
+    local
+    path = "./output"
+}
+
+apply glue

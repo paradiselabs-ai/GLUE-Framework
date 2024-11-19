@@ -11,7 +11,8 @@ from .keywords import (
     ROLE_KEYWORDS,
     CONFIG_KEYWORDS,
     OPERATION_KEYWORDS,
-    APP_KEYWORDS
+    APP_KEYWORDS,
+    CBM_KEYWORDS
 )
 
 @dataclass
@@ -32,6 +33,14 @@ class ToolConfig:
     config: Dict[str, Any]
 
 @dataclass
+class CBMConfig:
+    """CBM Configuration"""
+    models: List[str]
+    double_side_tape: List[Tuple[str, str]]
+    glue: Dict[str, str]
+    magnets: Dict[str, List[str]]
+
+@dataclass
 class GlueApp:
     """GLUE Application Configuration"""
     name: str
@@ -41,6 +50,7 @@ class GlueApp:
     # Store parsed models and tools
     models: Dict[str, ModelConfig] = field(default_factory=dict)
     tool_configs: Dict[str, ToolConfig] = field(default_factory=dict)
+    cbm_config: Optional[CBMConfig] = None
 
 class GlueParser:
     """Parser for GLUE DSL"""
@@ -49,6 +59,7 @@ class GlueParser:
         self.app: Optional[GlueApp] = None
         self.models: Dict[str, ModelConfig] = {}
         self.tools: Dict[str, ToolConfig] = {}
+        self.cbm_config: Optional[CBMConfig] = None
     
     def parse(self, content: str) -> GlueApp:
         """Parse GLUE DSL content"""
@@ -78,7 +89,10 @@ class GlueParser:
             
             print(f"\nParsing block: {block_type}\nContent: {block_content}")
             
-            if ':' in block_type:
+            if block_type == self.app.model:
+                # This is a CBM block
+                self._parse_cbm_block(block_type, block_content)
+            elif ':' in block_type:
                 self._parse_tool_path(block_type, block_content)
             elif '_' in block_type and any(block_type.endswith(suffix) for suffix in ROLE_KEYWORDS):
                 model_name = block_type.split('_')[0]
@@ -95,6 +109,7 @@ class GlueParser:
         if self.app:
             self.app.models = self.models
             self.app.tool_configs = self.tools
+            self.app.cbm_config = self.cbm_config
             
             # Debug output
             print("\nParsed tool configs:")
@@ -102,6 +117,60 @@ class GlueParser:
                 print(f"{name}: {config}")
         
         return self.app
+    
+    def _parse_cbm_block(self, name: str, content: str):
+        """Parse CBM block"""
+        print(f"\nParsing CBM block: {name}")
+        
+        # Extract models
+        models_match = re.search(r'models\s*=\s*([^{\n]+)', content)
+        models = []
+        if models_match:
+            models = [m.strip() for m in models_match.group(1).split(',')]
+        
+        # Extract double_side_tape chains
+        double_side_tape = []
+        chain_match = re.search(r'double_side_tape\s*=\s*{([^}]+)}', content)
+        if chain_match:
+            chain_content = chain_match.group(1).strip()
+            for line in chain_content.split('\n'):
+                line = line.strip()
+                if '>>' in line:
+                    parts = [p.strip() for p in line.split('>>')]
+                    for i in range(len(parts)-1):
+                        double_side_tape.append((parts[i], parts[i+1]))
+        
+        # Extract glue bindings
+        glue = {}
+        glue_match = re.search(r'glue\s*{([^}]+)}', content)
+        if glue_match:
+            glue_content = glue_match.group(1).strip()
+            for line in glue_content.split('\n'):
+                line = line.strip()
+                if ':' in line:
+                    tool, model = [p.strip() for p in line.split(':')]
+                    glue[tool] = model
+        
+        # Extract magnet bindings
+        magnets = {}
+        magnets_match = re.search(r'magnets\s*{([^}]+)}', content)
+        if magnets_match:
+            magnets_content = magnets_match.group(1).strip()
+            for line in magnets_content.split('\n'):
+                line = line.strip()
+                if ':' in line:
+                    tool, models_str = [p.strip() for p in line.split(':')]
+                    # Extract models from array syntax [model1, model2]
+                    models_list = re.findall(r'\[(.*?)\]', models_str)
+                    if models_list:
+                        magnets[tool] = [m.strip() for m in models_list[0].split(',')]
+        
+        self.cbm_config = CBMConfig(
+            models=models,
+            double_side_tape=double_side_tape,
+            glue=glue,
+            magnets=magnets
+        )
     
     def _extract_blocks(self, content: str) -> List[Tuple[str, str]]:
         """Extract blocks from content"""
